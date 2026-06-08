@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Painel de Envio de E-mails - RabbitMQ</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 30px; background-color: #f4f6f9; color: #333; }
+        .container { max-width: 900px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h2 { color: #2c3e50; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px; }
+        .row { display: flex; gap: 20px; margin-bottom: 20px; }
+        .col { flex: 1; padding: 15px; border: 1px solid #e2e8f0; border-radius: 6px; background: #fafafa; }
+        input, textarea { width: 95%; padding: 10px; margin-top: 5px; margin-bottom: 12px; border: 1px solid #cbd5e1; border-radius: 4px; }
+        button { background-color: #3498db; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        button:hover { background-color: #2980b9; }
+        .btn-send { background-color: #2ecc71; width: 100%; padding: 12px; font-size: 16px; }
+        .btn-send:hover { background-color: #27ae60; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        table, th, td { border: 1px solid #cbd5e1; }
+        th, td { padding: 8px; text-align: left; }
+        th { background-color: #edf2f7; }
+        .status-box { background: #1a202c; color: #68d391; padding: 15px; border-radius: 6px; font-family: monospace; height: 120px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>Sistema de Envio de E-mails Assíncronos com RabbitMQ</h2>
+    <div class="row">
+        <div class="col">
+            <h3>Cadastrar Destinatário</h3>
+            <label>Nome:</label>
+            <input type="text" id="nome" placeholder="Ex: João Silva">
+            <label>E-mail:</label>
+            <input type="email" id="email" placeholder="Ex: joao@puc.br">
+            <button onclick="cadastrarDestinatario()">Salvar no Banco</button>
+        </div>
+        <div class="col">
+            <h3>Criar Campanha / Mensagem</h3>
+            <label>Assunto:</label>
+            <input type="text" id="assunto" placeholder="Ex: Confirmação de Matrícula">
+            <label>Corpo do E-mail:</label>
+            <textarea id="corpo" rows="3" placeholder="Escreva a mensagem aqui..."></textarea>
+            <button class="btn-send" onclick="enviarLoteParaFila()">Publicar Disparo Assíncrono</button>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col">
+            <h3>Lista de Destinatários Cadastrados</h3>
+            <button onclick="carregarDestinatarios()">Atualizar Lista</button>
+            <table id="tabelaEmails">
+                <thead><tr><th>ID</th><th>Nome</th><th>E-mail</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+    <h3>Log de Resposta do Servidor (Evidência REST)</h3>
+    <div class="status-box" id="consoleLogs">Aguardando ações...</div>
+</div>
+<script>
+    const API_URL = 'http://localhost:8080/api/emails';
+    function log(msg) {
+        const box = document.getElementById('consoleLogs');
+        box.innerHTML += `<br>[${new Date().toLocaleTimeString()}] ${msg}`;
+        box.scrollTop = box.scrollHeight;
+    }
+    async function cadastrarDestinatario() {
+        const nome = document.getElementById('nome').value;
+        const email = document.getElementById('email').value;
+        if(!nome || !email) return alert('Preencha os campos!');
+        const res = await fetch(`${API_URL}/cadastrar`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ nome, email })
+        });
+        if(res.ok) {
+            log('Destinatário cadastrado com sucesso no Banco!');
+            document.getElementById('nome').value = '';
+            document.getElementById('email').value = '';
+            carregarDestinatarios();
+        }
+    }
+    async function carregarDestinatarios() {
+        const res = await fetch(`${API_URL}/listar`);
+        const dados = await res.json();
+        const tbody = document.querySelector('#tabelaEmails tbody');
+        tbody.innerHTML = '';
+        dados.forEach(d => {
+            tbody.innerHTML += `<tr><td>${d.id}</td><td>${d.nome}</td><td>${d.email}</td></tr>`;
+        });
+    }
+    async function enviarLoteParaFila() {
+        const assunto = document.getElementById('assunto').value;
+        const corpoMensagem = document.getElementById('corpo').value;
+        if(!assunto || !corpoMensagem) return alert('Preencha os dados do e-mail!');
+        log('Enviando requisição de lote para a API REST...');
+        const res = await fetch(`${API_URL}/enviar-lote`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ assunto, corpoMensagem })
+        });
+        const respostaTexto = await res.text();
+        log(respostaTexto);
+    }
+    carregarDestinatarios();
+</script>
+</body>
+</html>
